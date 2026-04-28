@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Words — Learn English</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #1c4557;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── CANVAS ── */
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── EDGE VIGNETTE — dark ocean frame, glowing centre ── */
+.depth-overlay {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 58% 52% at 50% 50%,
+      transparent     0%,
+      transparent    28%,
+      rgba(5,12,20, 0.50)  55%,
+      rgba(2, 6,12, 0.88)  76%,
+      rgba(1, 2, 6, 0.97) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ── LAYOUT ── */
+.stage {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* ── SECTION ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 48px;
+  cursor: default;
+  user-select: none;
+}
+
+.label {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 6px;
+  color: rgba(120, 185, 220, 0.4);
+  text-transform: uppercase;
+}
+
+/* ── WORD ── */
+.word-wrap {
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(84vw, 780px);
+}
+
+.word-row {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(34px, 4.8vw, 64px);
+  font-weight: 700;
+  color: #e8f6fc;
+  letter-spacing: 7px;
+  text-shadow:
+    0 0 70px rgba(100, 195, 235, 0.4),
+    0 0 28px rgba(60, 160, 210, 0.2),
+    0 3px 20px rgba(0,0,0,0.5);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── IDIOM ── */
+.idiom-wrap {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(88vw, 860px);
+}
+
+.idiom-row {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(22px, 3vw, 42px);
+  font-weight: 400;
+  font-style: italic;
+  color: rgba(190, 230, 245, 0.85);
+  letter-spacing: 1.5px;
+  text-shadow:
+    0 0 45px rgba(80, 170, 215, 0.28),
+    0 2px 14px rgba(0,0,0,0.38);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── LETTERS ── */
+.ch {
+  display: inline-block;
+  white-space: pre;
+  will-change: transform, opacity;
+}
+
+@keyframes arrive {
+  from { opacity: 0; transform: translateY(12px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes scatter {
+  0%   { opacity: 1; transform: translate(0,0) scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: translate(var(--dx),var(--dy)) scale(0.1) rotate(var(--dr)); }
+}
+
+.ch.in  { animation: arrive 0.55s cubic-bezier(0.22,1,0.36,1) both; }
+.ch.out { animation: scatter 0.75s cubic-bezier(0.4,0,1,1) both; }
+
+/* ── DIFFICULTY DOTS ── */
+.dots {
+  display: flex;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(100,165,200,0.18);
+  transition: background 0.4s, box-shadow 0.4s;
+}
+
+.dot.lit {
+  background: rgba(170,225,248,0.7);
+  box-shadow: 0 0 8px rgba(130,210,245,0.5);
+}
+
+/* ── DEFINITION ── */
+.def {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 15px;
+  font-style: italic;
+  color: rgba(120, 185, 215, 0.0);
+  max-width: 560px;
+  text-align: center;
+  line-height: 1.7;
+  transition: color 0.5s;
+  min-height: 22px;
+}
+
+.section:hover .def {
+  color: rgba(150, 210, 235, 0.7);
+}
+
+/* ── DIVIDER ── */
+.divider {
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(140,195,220,0.18), transparent);
+  margin: 4px 0;
+}
+
+/* ── HINT ── */
+.hint {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(100,165,200,0.25);
+  z-index: 10;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div class="depth-overlay"></div>
+
+<div class="stage">
+  <!-- WORD OF THE DAY -->
+  <div class="section" id="wSec">
+    <div class="label">Word of the Day</div>
+    <div class="word-wrap">
+      <div class="word-row" id="wRow"></div>
+    </div>
+    <div class="dots" id="wDots">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <div class="dot"></div><div class="dot"></div>
+    </div>
+    <div class="def" id="wDef"></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- IDIOM OF THE DAY -->
+  <div class="section" id="iSec">
+    <div class="label">Idiom of the Day</div>
+    <div class="idiom-wrap">
+      <div class="idiom-row" id="iRow"></div>
+    </div>
+    <div class="dots" id="iDots">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <div class="dot"></div><div class="dot"></div>
+    </div>
+    <div class="def" id="iDef"></div>
+  </div>
+</div>
+
+<div class="hint">hover to pause · move away to release</div>
+
+<script>
+// ════════════════════════════════════════
+//  DATA — sorted lv 1 → 5, repeating
+// ════════════════════════════════════════
+const WORDS = [
+  // lv 1 — ocean + study
+  { t:'WAVE',           d:'A ridge of water moving across the sea surface.',                  lv:1 },
+  { t:'TIDE',           d:'The regular rise and fall of the sea level.',                      lv:1 },
+  { t:'REEF',           d:'A ridge of rocks or coral near the water surface.',                lv:1 },
+  { t:'READ',           d:'To look at and understand written words.',                         lv:1 },
+  { t:'NOTE',           d:'A short written record to help you remember something.',           lv:1 },
+  // lv 2
+  { t:'SHORE',          d:'The land along the edge of an ocean or sea.',                      lv:2 },
+  { t:'DRIFT',          d:'To be carried slowly along by a current.',                         lv:2 },
+  { t:'CORAL',          d:'A hard substance built from tiny sea creatures.',                  lv:2 },
+  { t:'FOCUS',          d:'To concentrate attention or effort on something.',                 lv:2 },
+  { t:'REVISE',         d:'To go over material again in order to learn it better.',           lv:2 },
+  // lv 3
+  { t:'LAGOON',         d:'A shallow stretch of water separated from the sea.',               lv:3 },
+  { t:'PELAGIC',        d:'Living or occurring in the open ocean.',                           lv:3 },
+  { t:'ANALYSE',        d:'To examine something carefully to understand it.',                 lv:3 },
+  { t:'DEDUCE',         d:'To reach a conclusion through careful reasoning.',                 lv:3 },
+  { t:'FLUENCY',        d:'The ability to speak a language smoothly and easily.',             lv:3 },
+  // lv 4
+  { t:'ABYSSAL',        d:'Of or relating to the deep ocean floor.',                          lv:4 },
+  { t:'TEMPESTUOUS',    d:'Violently agitated; used of stormy seas or emotions.',             lv:4 },
+  { t:'PEDAGOGY',       d:'The method and practice of teaching as an academic subject.',      lv:4 },
+  { t:'ASSIDUOUS',      d:'Showing great care and effort in study or work.',                  lv:4 },
+  { t:'ELUCIDATE',      d:'To make something difficult clear and easy to understand.',        lv:4 },
+  // lv 5
+  { t:'BATHYPELAGIC',   d:'Occurring at ocean depths of 1,000 to 4,000 metres.',             lv:5 },
+  { t:'THALASSOPHILE',  d:'A person who loves and is drawn to the sea.',                      lv:5 },
+  { t:'CIRCUMNAVIGATE', d:'To sail completely around something, especially the Earth.',       lv:5 },
+  { t:'MNEMONICS',      d:'Techniques that use patterns or associations to aid memory.',      lv:5 },
+  { t:'EPISTEMOLOGY',   d:'The branch of philosophy concerned with the nature of knowledge.', lv:5 },
+];
+
+const IDIOMS = [
+  // lv 1
+  { t:'go with the flow',             d:'Accept the situation without resisting.',                    lv:1 },
+  { t:'make waves',                   d:'Cause trouble or create a strong reaction.',                  lv:1 },
+  { t:'hit the books',                d:'To start studying seriously.',                               lv:1 },
+  { t:'learn by heart',               d:'To memorise something so well you can repeat it perfectly.', lv:1 },
+  // lv 2
+  { t:'in deep water',                d:'In a serious or difficult situation.',                       lv:2 },
+  { t:'all at sea',                   d:'Completely confused and unsure what to do.',                 lv:2 },
+  { t:'burn the midnight oil',        d:'To work or study late into the night.',                      lv:2 },
+  { t:'on the right track',           d:'Doing something in a way that is likely to succeed.',        lv:2 },
+  // lv 3
+  { t:'the tip of the iceberg',       d:'A small visible part of a much larger hidden problem.',      lv:3 },
+  { t:'smooth sailing',               d:'A course of action free from trouble or difficulty.',        lv:3 },
+  { t:'wrap your head around it',     d:'To manage to understand something complicated.',             lv:3 },
+  { t:'go back to the drawing board', d:'To start a plan all over again after a failure.',            lv:3 },
+  // lv 4
+  { t:'batten down the hatches',               d:'Prepare carefully for a coming difficulty.',                lv:4 },
+  { t:'between the devil and the deep blue sea',d:'Caught between two equally unpleasant choices.',           lv:4 },
+  { t:'pull yourself up by your bootstraps',   d:'To improve your situation through your own effort alone.',  lv:4 },
+  { t:'separate the wheat from the chaff',     d:'To tell the difference between what is useful and what is not.', lv:4 },
+  // lv 5
+  { t:'caught between Scylla and Charybdis',   d:'Trapped between two equally dangerous alternatives.',       lv:5 },
+  { t:'throw someone a lifeline',              d:'Provide decisive help to someone in a desperate situation.', lv:5 },
+  { t:'the blind leading the blind',           d:'An inexperienced person guiding others who are equally lost.', lv:5 },
+];
+
+// ════════════════════════════════════════
+//  INTERLEAVED CYCLER — strictly lv 1→2→3→4→5→1→2…
+// ════════════════════════════════════════
+function interleave(arr){
+  const groups = [1,2,3,4,5].map(lv => arr.filter(x => x.lv === lv));
+  const out = [];
+  const maxLen = Math.max(...groups.map(g => g.length));
+  for(let i = 0; i < maxLen; i++)
+    groups.forEach(g => { if(g[i]) out.push(g[i]); });
+  return out;
+}
+
+const W_SEQ = interleave(WORDS);   // goes lv1,lv2,lv3,lv4,lv5,lv1,lv2…
+const I_SEQ = interleave(IDIOMS);
+let wIdx = 0, iIdx = 0;
+function nextWord(){  wIdx = (wIdx + 1) % W_SEQ.length;  return W_SEQ[wIdx]; }
+function nextIdiom(){ iIdx = (iIdx + 1) % I_SEQ.length; return I_SEQ[iIdx]; }
+
+function setDots(el, lv){
+  el.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('lit', i < lv));
+}
+
+function buildChars(row, text){
+  row.innerHTML = '';
+  [...text].forEach((ch,i) => {
+    const s = document.createElement('span');
+    s.className = 'ch in';
+    s.textContent = ch;
+    s.style.animationDelay = `${i*0.035}s`;
+    row.appendChild(s);
+    s.addEventListener('animationend', ()=>s.classList.remove('in'), {once:true});
+  });
+}
+
+function dissolve(row, cb){
+  const spans = [...row.querySelectorAll('.ch')];
+  if(!spans.length){ cb(); return; }
+  spans.forEach(s => {
+    s.classList.remove('in');
+    const dx = (Math.random()-0.5)*90;
+    const dy = (Math.random()-0.7)*70;
+    const dr = (Math.random()-0.5)*60+'deg';
+    s.style.setProperty('--dx', dx+'px');
+    s.style.setProperty('--dy', dy+'px');
+    s.style.setProperty('--dr', dr);
+    s.style.animationDelay = Math.random()*0.15+'s';
+    s.classList.add('out');
+  });
+  setTimeout(cb, 850);
+}
+
+function makeCycler(sectionId, rowId, dotsId, defId, firstItem, getNext, interval){
+  const sec  = document.getElementById(sectionId);
+  const row  = document.getElementById(rowId);
+  const dots = document.getElementById(dotsId);
+  const def  = document.getElementById(defId);
+  let state  = 'idle';
+  let timer  = null;
+
+  function show(item){
+    def.textContent = item.d;
+    setDots(dots, item.lv);
+    buildChars(row, item.t);
+  }
+
+  function doDissolve(nextItem){
+    state = 'dissolving';
+    clearTimeout(timer);
+    dissolve(row, () => {
+      show(nextItem);
+      state = 'idle';
+      timer = setTimeout(autoAdvance, interval);
+    });
+  }
+
+  function autoAdvance(){
+    if(state !== 'idle') return;
+    doDissolve(getNext());
+  }
+
+  sec.addEventListener('mouseenter', ()=>{ if(state==='idle'){ state='hovered'; clearTimeout(timer); } });
+  sec.addEventListener('mouseleave', ()=>{ if(state==='hovered') doDissolve(getNext()); });
+
+  show(firstItem);
+  timer = setTimeout(autoAdvance, interval);
+}
+
+makeCycler('wSec','wRow','wDots','wDef', W_SEQ[0], nextWord,  6000);
+makeCycler('iSec','iRow','iDots','iDef', I_SEQ[0], nextIdiom, 7500);
+
+// ════════════════════════════════════════
+//  CANVAS
+// ════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+// ── Light rays ──
+const rays = Array.from({length:6}, ()=>({
+  x:     (0.1+Math.random()*0.8)*window.innerWidth,
+  angle: -0.3+Math.random()*0.6,
+  width: 40+Math.random()*80,
+  alpha: 0.016+Math.random()*0.020,
+  speed: 0.0003+Math.random()*0.0003,
+  phase: Math.random()*Math.PI*2,
+}));
+
+function drawRays(t){
+  rays.forEach(r=>{
+    const a = r.alpha*(0.6+0.4*Math.sin(t*r.speed+r.phase));
+    const x = r.x+Math.sin(t*0.00015+r.phase)*60;
+    const grad = ctx.createLinearGradient(x,0,x,canvas.height*0.75);
+    grad.addColorStop(0,`rgba(120,200,240,${a})`);
+    grad.addColorStop(1,`rgba(120,200,240,0)`);
+    ctx.save();
+    ctx.translate(x,0); ctx.rotate(r.angle);
+    ctx.fillStyle=grad;
+    ctx.fillRect(-r.width/2,0,r.width,canvas.height*0.85);
+    ctx.restore();
+  });
+}
+
+// ── Bubbles ──
+class Bubble {
+  constructor(){ this.reset(true); }
+  reset(init=false){
+    this.x=Math.random()*canvas.width;
+    this.y=init?Math.random()*canvas.height:canvas.height+8;
+    this.r=0.8+Math.random()*3.2;
+    this.vy=0.25+Math.random()*0.65;
+    this.vx=(Math.random()-0.5)*0.3;
+    this.phase=Math.random()*Math.PI*2;
+    this.alpha=0.04+Math.random()*0.13;
+  }
+  update(){
+    this.y-=this.vy;
+    this.x+=this.vx+Math.sin(this.phase+=0.025)*0.4;
+    if(this.y<-10) this.reset();
+  }
+  draw(){
+    const fa=edgeFade(this.x,this.y,0.09);
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(160,215,240,${this.alpha*fa})`;
+    ctx.lineWidth=0.6; ctx.stroke();
+  }
+}
+
+function edgeFade(x,y,margin=0.12){
+  const W=canvas.width,H=canvas.height;
+  const fx=Math.min(x/(W*margin),(W-x)/(W*margin),1);
+  const fy=Math.min(y/(H*margin),(H-y)/(H*margin),1);
+  return Math.max(0,Math.min(fx,fy));
+}
+
+// ── Fish ──
+class Fish {
+  constructor(){ this.spawn(); }
+
+  spawn(){
+    const W=canvas.width, H=canvas.height;
+    const side=Math.floor(Math.random()*4);
+    if(side===0){      this.x=-130; this.y=H*0.1+Math.random()*H*0.8; this.angle=(Math.random()-0.4)*0.55; }
+    else if(side===1){ this.x=W+130; this.y=H*0.1+Math.random()*H*0.8; this.angle=Math.PI+(Math.random()-0.5)*0.55; }
+    else if(side===2){ this.x=W*0.1+Math.random()*W*0.8; this.y=-130; this.angle=Math.PI*0.5+(Math.random()-0.5)*0.50; }
+    else{              this.x=W*0.1+Math.random()*W*0.8; this.y=H+130; this.angle=-Math.PI*0.5+(Math.random()-0.5)*0.50; }
+
+    this.baseAngle = this.angle;
+    this.curAngle  = this.angle;
+    this.turnPhase = Math.random()*Math.PI*2;
+    this.turnRate  = 0.004 + Math.random()*0.003;  // very slow arc
+    this.turnAmt   = 0.07  + Math.random()*0.08;   // small, gentle arc
+
+    // Fixed speed — no pulses, no lerp-induced drift
+    this.speed = 0.50 + Math.random()*0.55;
+
+    this.size   = 28 + Math.random()*52;
+    this.phase  = Math.random()*Math.PI*2;
+    this.wobbleS= 0.018 + Math.random()*0.020;
+    this.wobbleA= 0.040 + Math.random()*0.045;   // lighter tail flex
+    this.maxA   = 0.20  + Math.random()*0.20;
+    const v=Math.floor(Math.random()*18);
+    this.col=[6+v,15+v,24+v];
+    this.alive=true;
+  }
+
+  draw(){
+    const fa=edgeFade(this.x,this.y,0.15)*this.maxA;
+    if(fa<0.005) return;
+    const [r,g,b]=this.col;
+    const s=this.size;
+    const flex=Math.sin(this.phase)*this.wobbleA;
+
+    ctx.save();
+    ctx.translate(this.x,this.y);
+    ctx.rotate(this.curAngle);
+
+    const fill=`rgba(${r},${g},${b},${fa})`;
+
+    // Body
+    ctx.beginPath();
+    ctx.moveTo(s*0.95,0);
+    ctx.bezierCurveTo( s*0.55,-s*0.30, -s*0.40,-s*0.28, -s*0.72, s*0.04+flex*s*0.18);
+    ctx.bezierCurveTo(-s*0.85,-s*0.05+flex*s*0.28, -s*0.90,-s*0.38+flex*s*0.55, -s*1.30,-s*0.42+flex*s*0.78);
+    ctx.bezierCurveTo(-s*1.06,-s*0.17+flex*s*0.33, -s*1.00, flex*s*0.07, -s*0.86, flex*s*0.09);
+    ctx.bezierCurveTo(-s*1.00,-flex*s*0.07, -s*1.06, s*0.17-flex*s*0.33, -s*1.30, s*0.42-flex*s*0.78);
+    ctx.bezierCurveTo(-s*0.90, s*0.38-flex*s*0.55, -s*0.85, s*0.05-flex*s*0.28, -s*0.72,-s*0.04-flex*s*0.18);
+    ctx.bezierCurveTo(-s*0.40, s*0.28, s*0.55, s*0.30, s*0.95,0);
+    ctx.closePath();
+    ctx.fillStyle=fill; ctx.fill();
+
+    // Dorsal fin
+    ctx.beginPath();
+    ctx.moveTo(s*0.10,-s*0.27);
+    ctx.bezierCurveTo(s*0.22,-s*0.56,-s*0.18,-s*0.58,-s*0.40,-s*0.27);
+    ctx.closePath();
+    ctx.fillStyle=`rgba(${r},${g},${b},${fa*0.50})`; ctx.fill();
+
+    // Pectoral fin
+    ctx.beginPath();
+    ctx.moveTo(s*0.30,s*0.22);
+    ctx.bezierCurveTo(s*0.48,s*0.48,s*0.04,s*0.52,s*0.04,s*0.26);
+    ctx.closePath();
+    ctx.fillStyle=`rgba(${r},${g},${b},${fa*0.40})`; ctx.fill();
+
+    ctx.restore();
+  }
+
+  update(){
+    // Direct sine arc — no lerp, no acceleration, perfectly smooth
+    this.turnPhase += this.turnRate;
+    this.curAngle = this.baseAngle + Math.sin(this.turnPhase) * this.turnAmt;
+
+    this.phase += this.wobbleS;
+
+    // Constant speed at all times
+    this.x += Math.cos(this.curAngle) * this.speed;
+    this.y += Math.sin(this.curAngle) * this.speed;
+
+    const W=canvas.width, H=canvas.height;
+    if(this.x<-260||this.x>W+260||this.y<-260||this.y>H+260) this.alive=false;
+  }
+}
+
+const fishes  = Array.from({length:14},()=>new Fish());
+const bubbles = Array.from({length:38},()=>new Bubble());
+
+function animate(t){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawRays(t);
+  bubbles.forEach(b=>{b.update();b.draw();});
+  for(let i=0;i<fishes.length;i++){
+    fishes[i].update(); fishes[i].draw();
+    if(!fishes[i].alive) fishes[i]=new Fish();
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
